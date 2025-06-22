@@ -1,0 +1,5 @@
+objects: 
+    shelf floor: "Give the segmentatioc /n masks for shelf. Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key \"box_2d\", the segmentation mask in key \"mask\", and the text label in the key \"label\". Use descriptive labels."  
+    shelf: "I will now provide an image that includes a shelf taken from a close distance, where the entire shelf may not be visible. Please generate segmentation masks for the shelf (cabinet) only, ignoring any open doors. Also, please treat the objects inside the shelf as part of the shelf and segment them together. Output a JSON list where each entry includes the 2D bounding box (box_2d), the segmentation mask (mask), and a descriptive text label (label)."
+    test: "I will now provide an image that includes a shelf taken from a close distance, where the entire shelf may not be visible; please generate segmentation masks for the shelf (cabinet) only, ignoring open doors, and mask all non-shelf areas in solid black, outputting a JSON list where each entry includes the 2D bounding box (box_2d), the segmentation mask (mask), and a descriptive text label (label)."
+    
