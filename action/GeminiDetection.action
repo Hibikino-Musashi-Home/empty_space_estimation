@@ -1,0 +1,7 @@
+sensor_msgs/Image image
+string where
+---
+bool is_detected
+BBox bbox
+---
+bool feedback

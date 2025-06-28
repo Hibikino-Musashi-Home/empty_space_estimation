@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  gemini-flask-api:
+    build:
+      context: .    # ← ここを変更！
+      dockerfile: Dockerfile
+    volumes:
+      - ../api:/gemini_docker/api    # apiの中身をコンテナの/apiにマウント（必要に応じて）
+      - ../io:/gemini_docker/io  # ioの中身をコンテナの/ioにマウント（必要に応じて）
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}  # .envのキーを渡す
+    ports:
+      - "5001:5001"     # Flaskのポート公開
+    command: python3 /gemini_docker/api/estimation_flask_api.py

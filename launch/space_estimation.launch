@@ -1,0 +1,11 @@
+<launch>
+    <arg name="nanosam_specific_id_path" default="$(find tam_hsr_task_gpsr)/io/config/nanosam.yaml"/>
+    <!-- Semantic Map -->
+    <include file="$(find nanosam_detection)/launch/hsr_head_rgbd_nanosam_service.launch">
+        <arg name="specific_id" default="$(arg nanosam_specific_id_path)"/>
+    </include>
+
+    <!-- space estimation server -->
+    <node pkg="empty_space_estimation" type="space_estimation_server.py" name="space_estimation" output='screen'>
+    </node>
+</launch>
