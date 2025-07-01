@@ -41,7 +41,15 @@ class Seg2PlaceChatBotGemini:
         self.srv_estimation = rospy.Service("/empty_space_estimation/service", EmptySpaceService, self.run)
         self.pub_image = rospy.Publisher("/empty_space_estimation/result_image", ROSImage, queue_size=1)
         rospy.loginfo("Empty space estimation service is ready!")
-        self.marker_pub = rospy.Publisher('selected_point_marker', Marker, queue_size=1, latch=True)
+        self.vizualization = rospy.get_param("~visualize", False)
+        fx, fy, cx, cy = rospy.get_param("/hsrb/head_rgbd_sensor/depth_registered/camera_info", [525.0, 525.0, 319.5, 239.5])
+        self.fx = fx
+        self.fy = fy
+        self.cx = cx
+        self.cy = cy
+
+        if self.vizualization:
+            self.marker_pub = rospy.Publisher('selected_point_marker', Marker, queue_size=1, latch=True)
         
 
 
@@ -122,8 +130,6 @@ class Seg2PlaceChatBotGemini:
         bottom_right = (center_x + marker_size // 2, center_y + marker_size // 2)
         cv2.rectangle(img, top_left, bottom_right, marker_color, 2)
         cv2.imwrite(output_path, img)
-        print(f"選択された数字：{select_number}")
-        print(f"マーカーを追加した画像を {output_path} に保存しました。")
         return center_x, center_y
 
 
@@ -157,7 +163,6 @@ class Seg2PlaceChatBotGemini:
 
     def calculate_average_elapsed_time(self, yaml_path):
         if not os.path.exists(yaml_path):
-            print(f"ファイルが見つかりません: {yaml_path}")
             return
         with open(yaml_path, "r") as f:
             data = yaml.safe_load(f)
@@ -166,7 +171,6 @@ class Seg2PlaceChatBotGemini:
         times = [entry["処理時間"] for entry in data]
         average_time = sum(times) / len(times)
 
-        print(f"平均処理時間: {average_time:.6f} 秒")
         return
 
 
@@ -198,7 +202,6 @@ class Seg2PlaceChatBotGemini:
         file_path = os.path.join(package_path, "io", "config.yaml")
         with open(file_path, 'r') as file:
             config = yaml.safe_load(file)
-            rospy.loginfo(f"Config loaded: {config}")
         input_path = config["PATH"]["IMG_TARGET"]
         if ros_image_msg.encoding == "8UC3":
             ros_image_msg.encoding = "bgr8"
@@ -217,7 +220,6 @@ class Seg2PlaceChatBotGemini:
     def get_3d_point_from_pixel_correct_nan(self, pc_msg, x, y):
         width = pc_msg.width
         height = pc_msg.height
-        rospy.loginfo(f"PointCloud2 width: {width}, height: {height}, start x: {x}, y: {y}")
 
         start_index = y * width + x
         gen = pc2.read_points(pc_msg, field_names=("x", "y", "z"), skip_nans=False)
@@ -234,66 +236,38 @@ class Seg2PlaceChatBotGemini:
         if not (math.isnan(x1) or math.isnan(y1) or math.isnan(z1)):
             rospy.loginfo(f"Start point is valid: {first_pt}")
             return first_pt
+        
+        """ 補完済み深度マップからの 3D 点を計算して返す """
+        z = float(self.filled_z[x, y])
+        # ピクセル→実空間の変換
+        x = (x - self.cx) * z / self.fx
+        y = (y - self.cy) * z / self.fy
 
-        # 最初がNaNの場合のみ右に探索
-        valid_points = []
-        valid_dx = []  # 有効点のdxを保存
-        nan_streak = 0
+        return x, y, z
 
-        for dx in range(1, width - x):
-            idx = start_index + dx
-            if idx >= len(points):
-                rospy.logwarn("Index out of range during search.")
-                break
+    def build_filled_depth_map(self, pc_msg):
+        """ 点群から Z マップを作り、NaN 部分をインペイントして返す """
+        width = pc_msg.width
+        height = pc_msg.height
 
-            _, pt = points[idx]
-            x_val, y_val, z_val = pt
+        # 点群から Z 値だけ抜き出して 2D マップに
+        z_list = [pt[2] for pt in pc2.read_points(pc_msg, field_names=("x","y","z"), skip_nans=False)]
+        z_map = np.array(z_list, dtype=np.float32).reshape((height, width))
 
-            if math.isnan(x_val) or math.isnan(y_val) or math.isnan(z_val):
-                nan_streak += 1
-                valid_points.clear()
-                valid_dx.clear()
-                rospy.loginfo(f"NaN at dx={dx}, resetting valid_points")
-                if nan_streak >= 2:
-                    rospy.loginfo("Two consecutive NaNs encountered, stopping search.")
-                    break
-            else:
-                nan_streak = 0
-                valid_points.append(pt)
-                valid_dx.append(dx)
-                rospy.loginfo(f"Valid point at dx={dx}: {pt}")
-                if len(valid_points) >= 2:
-                    break
+        # NaN 部分をマスク化
+        nan_mask = np.isnan(z_map).astype(np.uint8)
 
-        if len(valid_points) < 2:
-            rospy.logwarn("Could not find two consecutive valid points for correction.")
-            return None
-
-        # 1ピクセルあたりの距離を計算（2連続有効点のx座標差 / dx差）
-        x_a, y_a, z_a = valid_points[0]
-        x_b, y_b, z_b = valid_points[1]
-        dx_a = valid_dx[0]
-        dx_b = valid_dx[1]
-
-        pixel_distance = (x_b - x_a) / (dx_b - dx_a)
-        rospy.loginfo(f"Pixel distance per 1 pixel: {pixel_distance}")
-
-        # 最後の有効点dxから、最初のNaN位置（dx=0）までの距離補正を計算
-        # ここでは最後の有効点のx座標から、移動距離分(pixel_distance * dx)を掛けて補正
-        total_shift = pixel_distance * dx_b
-        corrected_x = x_b - total_shift
-        rospy.loginfo(f"Corrected x coordinate: {corrected_x}")
-
-        # y,zは最後の有効点の値を使う
-        corrected_pt = (corrected_x, y_b, z_b)
-
-        rospy.loginfo(f"Corrected point: {corrected_pt}")
-        return corrected_pt
+        # インペイント（NS 法）
+        z_filled = cv2.inpaint(z_map, nan_mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
+        return z_filled
 
     
     def run(self, req):
+        if not hasattr(self, '_z_filled'):
+            self._z_filled = self.build_filled_depth_map(req.point)
+
+        self.cvbridge = CvBridge()
         image = req.image
-        input_image_path = self.save_image(image)
         
         # image_path = seg_node.main_segmentation(input_image_path)
 
@@ -304,12 +278,11 @@ class Seg2PlaceChatBotGemini:
         file_path = os.path.join(package_path, "io", "config.yaml")
         with open(file_path, 'r') as file:
             config = yaml.safe_load(file)
-            rospy.loginfo(f"Config loaded: {config}")
         add_number_path = config["PATH"]["IMG_ADD_NUMBERS"]
         
 
     
-        image = cv2.imread(input_image_path)
+        image = self.cvbridge.imgmsg_to_cv2(image, desired_encoding='bgr8')
         image = self.add_numbers_to_image(image, add_number_path)
        
 
@@ -321,24 +294,24 @@ class Seg2PlaceChatBotGemini:
         print(f"Using URL: {url}")
 
         files = [self.prepare_file_entry("image", image)]
+        # 質問の用意\
+        data = {"question": str(req.question)}
 
         rospy.loginfo("Sending request to the server...")
-        select_number = requests.post(url, files=files)
+        select_number = requests.post(url, files=files, data=data)
         rospy.loginfo(f"Response from server: {select_number.text}")
                 # パッケージパスの後ろに続けるパス
         file_path = os.path.join(package_path, "io", "config.yaml")
         with open(file_path, 'r') as file:
             config = yaml.safe_load(file)
-            rospy.loginfo(f"Config loaded: {config}")
         add_marker_path = config["PATH"]["IMG_ADD_NUMBERS"]
         x, y = self.add_number_to_image_next(select_number.text, add_marker_path)
         
         response = EmptySpaceServiceResponse()
-        rospy.loginfo(req.point.header.frame_id)
-        rospy.loginfo(f"Received point: {req.point}")
         response.results.frame_id = str(req.point.header.frame_id)
         rospy.loginfo(f"Frame ID: {response.results.frame_id}")
-        
+       
+
 
       
         point = self.get_3d_point_from_pixel_correct_nan(req.point, x, y)
@@ -346,36 +319,36 @@ class Seg2PlaceChatBotGemini:
         response.results.x = x
         response.results.y = y
 
-       
-        marker = Marker()
-        marker.header.frame_id = str(req.point.header.frame_id)  # ここはあなたの点群のフレームに合わせてください
-        marker.header.stamp = rospy.Time.now()
-        marker.ns = str(req.point.header.frame_id)
-        marker.id = 0
-        marker.type = Marker.SPHERE
-        marker.action = Marker.ADD
+        if self.vizualization:
+            marker = Marker()
+            marker.header.frame_id = str(req.point.header.frame_id)  # ここはあなたの点群のフレームに合わせてください
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = str(req.point.header.frame_id)
+            marker.id = 0
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
 
-        marker.pose.position.x = x
-        marker.pose.position.y = y
-        marker.pose.position.z = z
+            marker.pose.position.x = x
+            marker.pose.position.y = y
+            marker.pose.position.z = z
 
-        marker.pose.orientation.x = 0
-        marker.pose.orientation.y = 0
-        marker.pose.orientation.z = 0
-        marker.pose.orientation.w = 1
+            marker.pose.orientation.x = 0
+            marker.pose.orientation.y = 0
+            marker.pose.orientation.z = 0
+            marker.pose.orientation.w = 1
 
-        marker.scale.x = 0.1
-        marker.scale.y = 0.1
-        marker.scale.z = 0.1
+            marker.scale.x = 0.05
+            marker.scale.y = 0.05
+            marker.scale.z = 0.05
 
-        marker.color.r = 1.0
-        marker.color.g = 0.0
-        marker.color.b = 0.0
-        marker.color.a = 1.0
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
 
-        marker.lifetime = rospy.Duration()
+            marker.lifetime = rospy.Duration()
 
-        self.marker_pub.publish(marker)
+            self.marker_pub.publish(marker)
                 
         return response
         

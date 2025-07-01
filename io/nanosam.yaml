@@ -1,10 +1,7 @@
 object:
   - object
-snack:
-  - snack
-food:
-  - food
-drink:
-  - drink
-apple:
-  - apple
+  - cup
+  - peach
+  - fruit
+  - spam
+  - canned

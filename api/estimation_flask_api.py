@@ -57,13 +57,14 @@ def create_chat():
     logging.debug("Received request to /empty_space_estimation")
     files = request.files.getlist("images")
     image = files[0] 
+    data = request.form.get("question")
+    print(f"Received data: {data}")
 
 
 
     model = "gemini-2.5-flash-lite-preview-06-17"  
     im = Image.open(io.BytesIO(image.read()))
     print(type(im))
-    question = "リンゴを置くのにふさわしい場所はどこですか？"
     # ThinkingConfigの設定
     if model == "gemini-2.5-flash-lite-preview-06-17":
         thinking_config = types.ThinkingConfig(thinking_budget=512)
@@ -80,11 +81,11 @@ def create_chat():
             条件：
             - 棚の中であること（棚の外にある番号は絶対に選ばないでください）
             - 落下の危険がない場所（安定して物を置ける棚板の上）
+            - 物体が置かれていない場所（他のオブジェクトに近すぎる番号は選ばないでください）
             - カテゴリ（果物, 文房具、調味料、飲み物, ボール)
-            - 周囲の物体に同じカテゴリのものがあればその横の数字を選んでください。
+            - 周囲の物体に同じカテゴリのものがあれば**横(左か右)**の数字を選んでください。
             - 周囲に同じカテゴリの物体がないときは最も広い場所にある番号を選んでください。
-            - 空きスペースにある番号を優先してください（物体がすでにある番号は除外）
-            - 同じカテゴリの物体の近くに来るようにoffset_pixelsを指定してください。
+            - 同じカテゴリの物体の隣に来るようにoffset_pixelsを指定してください。
 
             {"recommended_number": <整数>,"offset_pixels": {"x": <整数>,"y": <整数>},"explanation": "<説明文>"}
 
@@ -94,7 +95,7 @@ def create_chat():
             - offset_pixelsは、選択した番号の位置が安定である場合は0を出力してください。
             - 既にある物体はバウンディングボックスで囲まれているので、バウンディングボックスに重なっている番号は選ばないでください。
             """,
-            question,
+            data,
             im
         ],
         config=types.GenerateContentConfig(

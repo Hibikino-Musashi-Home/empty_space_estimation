@@ -25,23 +25,10 @@ class SpaceEstimationClient:
         # ServiceProxy登録
         self.client = rospy.ServiceProxy("/empty_space_estimation/service", EmptySpaceService)
         self.client_nanosam = rospy.ServiceProxy("/object_detection/service", ObjectDetectionService)
-
         rospy.loginfo("Empty Space Estimation Client initialized.")
 
     def callback(self, msg):
         self.image_msg = msg  # ← ここで画像を保存
-
-    def save_image(self, image_msg, file_path):
-        try:
-            image_msg.encoding = "bgr8"  # 画像のエンコーディングを指定
-
-            # ROSのImageメッセージをOpenCVの画像に変換
-            cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding="bgr8")
-            # 画像を保存
-            cv2.imwrite(file_path, cv_image)
-            rospy.loginfo(f"画像を保存しました: {file_path}")
-        except Exception as e:
-            rospy.logerr(f"画像の保存に失敗しました: {str(e)}")
 
     def mark_image(
         self,
@@ -56,7 +43,7 @@ class SpaceEstimationClient:
             np.ndarray: 描画画像．
         """
      
-        result_image = self.bridge.compressed_imgmsg_to_cv2(image)
+        result_image = self.bridge.imgmsg_to_cv2(image, desired_encoding='bgr8')
         for box in bboxes:  # msg.bbox: List of this custom message
             x_min = box.x - box.w / 2
             y_min = box.y - box.h / 2
@@ -72,21 +59,28 @@ class SpaceEstimationClient:
         file_path = os.path.join(package_path, "io", "config.yaml")
         with open(file_path, 'r') as file:
             config = yaml.safe_load(file)
-            rospy.loginfo(f"Config loaded: {config}")
         input_path = config["PATH"]["IMG_TARGET"]
-        if ros_image_msg.encoding == "8UC3":
-            ros_image_msg.encoding = "bgr8"
-        # ROS Imageメッセージ → OpenCV形式に変換（BGR8）
-        cv_image = self.bridge.imgmsg_to_cv2(ros_image_msg, desired_encoding='bgr8')
+        try:
+            if ros_image_msg.encoding == "8UC3":
+                ros_image_msg.encoding = "bgr8"
+                cv_image = self.bridge.imgmsg_to_cv2(ros_image_msg, desired_encoding='bgr8')
+            else:
+                cv_image = self.bridge.imgmsg_to_cv2(ros_image_msg, desired_encoding=ros_image_msg.encoding)
 
+        except:
+            rospy.loginfo("Encoding is not 8UC3, cannot convert to bgr8.")
+            cv_image = self.bridge.compressed_imgmsg_to_cv2(ros_image_msg, desired_encoding='bgr8')
+
+            
+
+        # ROS Imageメッセージ → OpenCV形式に変換（BGR8）
+       
         # JPEGで保存
         cv2.imwrite(input_path, cv_image)
 
-        print(f"Saved image to {input_path}")
-
         rospy.loginfo(f"Saving image to {input_path}")
 
-        return 
+        return input_path
     
 
     def run(self):
@@ -94,7 +88,6 @@ class SpaceEstimationClient:
             # nanosamを呼び出す
             package = roslib.packages.get_pkg_dir("empty_space_estimation")
             ymal_path = os.path.join(package, "io", "nanosam.yaml")
-            rospy.loginfo("Nanosam detection service is ready!")
             point = rospy.wait_for_message("/hma_pcl_reconst/depth_registered/points", PointCloud2, timeout=10)
             request_nanosam = ObjectDetectionServiceRequest(use_latest_image=True, specific_id=ymal_path, max_distance=1.0)
             response_nanosam = self.client_nanosam(request_nanosam)
@@ -113,13 +106,15 @@ class SpaceEstimationClient:
             # package_path = roslib.packages.get_pkg_dir("empty_space_estimation")
             # file_path = os.path.join(package_path, "input", "tmp_input_image.jpg")
             # self.save_image(self.image_msg, file_path)
-            
+            target_obj = rospy.get_param("/target_object", "コップ")
+            request.question = f"棚の画像を解析して、{target_obj}置くのに適した場所を提案してください。"
             request.image = self.bridge.cv2_to_imgmsg(detection_image, encoding="bgr8")
             request.point = point  # PointCloud2メッセージをセット
             response = self.client(request)
 
             rospy.loginfo("空き領域推定結果:")
             rospy.loginfo(response.results)
+            return response.results
 
         except rospy.ServiceException as e:
             rospy.logerr("サービス呼び出しに失敗しました: %s", str(e))

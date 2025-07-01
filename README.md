@@ -38,20 +38,14 @@ docker compose build
 ```
 ---
 ## 起動手順
-### 基準画像取得の場合
 
-
-[terminal 1]
+[Terminal 1]
 ```bash
-$ cd ~/ros_ws
-$ . 0_env.sh
-$ source /entrypoint.sh
-$ source 1_hsrb_settings.sh
-$ source devel/setup.bash
-$ roslaunch tam_hsr_utils bringup.launch joy_device_id:=0
+$ cd ~/ros_ws/src/5_skills/space_estimation_server/env_docker
+$ docker compose up
 ```
 
-
+launch 起動時にvisualize=Trueにすることで推定場所を可視化（markerトピック）
 [Terminal 2]
 ```bash
 $ cd ~/ros_ws
@@ -59,24 +53,56 @@ $ . 0_env.sh
 $ source /entrypoint.sh
 $ source 1_hsrb_settings.sh
 $ source devel/setup.bash
-$  roslaunch navigation_start navigation.launch map_name:=<>
+$ roslaunch empty_space_estimation space_estimation.launch
 ```
 
-[Terminal 3]
+## 使い方
+クライアントクラスをインポート
+
 ```bash
-$ cd ~/ros_ws/src/5_skills/space_estimation_server/env_docker
-$ docker compose up
+from empty_space_estimation.space_estimation_client import SpaceEstimationClient
+```
+配置対象をパラメータに設定
+
+```
+rospy.set_param("/target_obj", "コップ")
 ```
 
-[Terminal 4]
-```bash
-$ cd ~/ros_ws
-$ . 0_env.sh
-$ source /entrypoint.sh
-$ source 1_hsrb_settings.sh
-$ source devel/setup.bash
-$ rosrun space_estimation.launch
+クライアントを生成して実行
 ```
+self.space_estimation = SpaceEstimationClient()
+self.space_estimation.run()
+```
+
+
+## サンプルコード(call_client_test.py)
+
+```
+#!/usr/bin/env python3
+import rospy
+from empty_space_estimation.space_estimation_client import SpaceEstimationClient
+
+def your_task_function():
+    # 1. 配置対象を設定
+    rospy.set_param("/target_obj", "コップ")
+
+    # 2. クライアント作成
+    client = SpaceEstimationClient()
+
+    # 3. 推定実行
+    results = client.run()
+    rospy.loginfo(results)
+    
+
+if __name__ == "__main__":
+    rospy.init_node("your_task_node")
+    your_task_function()
+    rospy.spin()
+```
+
+
+## 説明
+
 
 
 ```

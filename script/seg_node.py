@@ -119,7 +119,6 @@ def prepare_file_entry(name, value):
         
 def main_segmentation(image_path: str = None) -> str:
     im = Image.open(image_path)
-    rospy.loginfo(type(im))
     # Flaskサーバーのエンドポイント
     if rospy.get_param("hsr_type", "exeception") != "exeception":
         url = "http://192.168.0.10:5001/segmentation"
@@ -130,7 +129,6 @@ def main_segmentation(image_path: str = None) -> str:
     
     files = [prepare_file_entry("image", im)]
     res = requests.post(url, files=files)
-    rospy.loginfo(f"Response from server: {res.text}")
     
     masks = parse_segmentation_masks(res.text, img_height=im.height, img_width=im.width)
     result = cv2.cvtColor(np.array(plot_segmentation_masks(im, masks)), cv2.COLOR_BGR2RGB)
@@ -141,7 +139,6 @@ def main_segmentation(image_path: str = None) -> str:
     file_path = os.path.join(package_path, "io", "config.yaml")
     with open(file_path, 'r') as file:
         config = yaml.safe_load(file)
-        rospy.loginfo(f"Config loaded: {config}")
     out_path = config["PATH"]["IMG_MASK"]
 
     

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(empty_space_estimation)
 
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
@@ -9,6 +10,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   message_generation
 )
+
+catkin_python_setup()
 
 add_message_files(
     FILES
