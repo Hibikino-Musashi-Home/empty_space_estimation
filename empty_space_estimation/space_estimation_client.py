@@ -11,7 +11,8 @@ import numpy as np
 from torch import Tensor
 import torch
 from typing import Sequence
-import seg_node  # Assuming seg_node is a module that provides the main_segmentation function
+# import seg_node  # Assuming seg_node is a module that provides the main_segmentation function
+from empty_space_estimation import seg_node 
 import yaml
 
 class SpaceEstimationClient:
