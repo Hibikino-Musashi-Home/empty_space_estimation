@@ -13,7 +13,6 @@ import datetime
 import glob
 import yaml
 import dataclasses
-import seg_node
 import roslib
 import requests
 import subprocess
@@ -269,7 +268,7 @@ class Seg2PlaceChatBotGemini:
         self.cvbridge = CvBridge()
         image = req.image
         
-        # image_path = seg_node.main_segmentation(input_image_path)
+        # image_path = .main_segmentation(input_image_path)
 
         select_number = None
         package_path = roslib.packages.get_pkg_dir("empty_space_estimation")
