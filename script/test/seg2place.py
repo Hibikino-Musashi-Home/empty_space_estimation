@@ -13,7 +13,7 @@ import datetime
 import glob
 import yaml
 import dataclasses
-import seg
+import script.test.seg as seg
 
 
 class Seg2PlaceChatBotGemini:

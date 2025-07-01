@@ -108,7 +108,9 @@ class SpaceEstimationClient:
             # file_path = os.path.join(package_path, "input", "tmp_input_image.jpg")
             # self.save_image(self.image_msg, file_path)
             target_obj = rospy.get_param("/target_object", "コップ")
-            request.question = f"棚の画像を解析して、{target_obj}置くのに適した場所を提案してください。"
+            add_prompt = rospy.get_param("/add_prompt", "")
+            rospy.loginfo(f"Target object for space estimation: {target_obj}")
+            request.question = f"追加情報として，{add_prompt}．棚の画像を解析して、{target_obj}置くのに適した場所を提案してください。"
             request.image = self.bridge.cv2_to_imgmsg(detection_image, encoding="bgr8")
             request.point = point  # PointCloud2メッセージをセット
             response = self.client(request)

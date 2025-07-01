@@ -1,7 +1,62 @@
+# object:
+#   - object
+#   - cup
+#   - peach
+#   - fruit
+#   - spam
+#   - canned
+
+# rc24オブジェクト
+# cleaning_supply:
+#       ["soap", "dishwasher_tab", "washcloth", "sponges"]
+# drink:
+#       ["cola", "ice_tea", "water", "milk", "big_coke", "fanta", "dubbelfris"]
+# food:
+#       ["cornflakes", "pea_soup", "curry", "pancake_mix", "hagelslag", "sausages", "mayonaise"]
+# decoration:
+#       ["candle"]
+# fruit:
+#       ["pear", "plum", "peach", "lemon", "orange", "strawberry", "banana", "apple"]
+# snack:
+#       ["stroopwafel", "candy", "liquorice", "crisps", "pringles", "tictac"]
+# dish:
+#       ["spoon", "plate", "mug", "fork", "bowl"]
 object:
-  - object
-  - cup
-  - peach
-  - fruit
-  - spam
-  - canned
+  - a soap
+  - a dishwashing tablet
+  - a washcloth
+  - a sponge
+  - a cola
+  - an ice tea
+  - a water
+  - a milk
+  - a big coke
+  - a fanta
+  - a dubbelfris
+  - a cornflakes
+  - a pea soup
+  - a curry
+  - a pancake mix
+  - a hagelslag
+  - a sausages
+  - a mayonaise
+  - a candle
+  - a pear
+  - a plum
+  - a peach
+  - a lemon
+  - an orange
+  - a strawberry
+  - a banana
+  - an apple
+  - a stroopwafel
+  - a candy
+  - a liquorice
+  - a crisps
+  - a pringles
+  - a tictac
+  - a spoon
+  - a plate
+  - a mug
+  - a fork
+  - a bowl
