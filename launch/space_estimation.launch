@@ -4,6 +4,7 @@
 
     <!-- nanosam-->
     <include file="$(find nanosam_detection)/launch/hsr_head_rgbd_nanosam_service.launch">
+        <arg name="action_name" default="/object_detection_nanosam"/>
         <arg name="specific_id" default="$(arg nanosam_specific_id_path)"/>
     </include>
 
