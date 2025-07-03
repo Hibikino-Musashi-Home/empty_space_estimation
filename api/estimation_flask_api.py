@@ -60,8 +60,6 @@ def create_chat():
     data = request.form.get("question")
     print(f"Received data: {data}")
 
-
-
     model = "gemini-2.5-flash-lite-preview-06-17"  
     im = Image.open(io.BytesIO(image.read()))
     print(type(im))

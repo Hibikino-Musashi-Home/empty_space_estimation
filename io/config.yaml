@@ -1,7 +1,7 @@
 PATH:
-  IMG_TARGET: /home/hma/ros_ws/src/5_skills/empty_space_estimation/input/input.jpg # 検出したい画像を保存するディレクトリ
-  IMG_MASK: /home/hma/ros_ws/src/5_skills/empty_space_estimation/output/mask.jpg # 検出結果の画像を保存するディレクトリ
-  IMG_ADD_NUMBERS: /home/hma/ros_ws/src/5_skills/empty_space_estimation/output/add_number.jpg # 検出結果の画像を保存するディレクトリ
+  IMG_TARGET: /home/hma/ros_ws/src/5_skills/empty_space_estimation/io/input/input.jpg # 検出したい画像を保存するディレクトリ
+  IMG_MASK: /home/hma/ros_ws/src/5_skills/empty_space_estimation/io/output/mask.jpg # 検出結果の画像を保存するディレクトリ
+  IMG_ADD_NUMBERS: /home/hma/ros_ws/src/5_skills/empty_space_estimation/io/output/add_number.jpg # 検出結果の画像を保存するディレクトリ
 MODEL:
   PRO: gemini-2.5-pro-exp-03-25
   PRO_PREVIEW: gemini-2.5-pro-preview-06-05
