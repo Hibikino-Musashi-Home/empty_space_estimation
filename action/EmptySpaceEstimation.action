@@ -1,0 +1,10 @@
+# Goal
+sensor_msgs/Image image
+sensor_msgs/PointCloud2 point
+string question
+---
+# result
+empty_space_estimation/EmptySpace results
+---
+# feedback
+int32 feedback

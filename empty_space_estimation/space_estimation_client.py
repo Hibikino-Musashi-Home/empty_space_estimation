@@ -10,23 +10,31 @@ import roslib
 import numpy as np
 from torch import Tensor
 import torch
+import actionlib
 from typing import Sequence
 # import seg_node  # Assuming seg_node is a module that provides the main_segmentation function
 from empty_space_estimation import seg_node 
+from empty_space_estimation.msg import EmptySpace, EmptySpaceEstimationAction, EmptySpaceEstimationFeedback, EmptySpaceEstimationResult, EmptySpaceEstimationGoal
+from tamlib.utils import Logger
+
 import yaml
 
-class SpaceEstimationClient:
+class SpaceEstimationClient(Logger):
     def __init__(self):
-        rospy.init_node("empty_space_client")
         self.bridge = CvBridge()
+        Logger.__init__(self)
 
         rospy.wait_for_service("/empty_space_estimation/service")
 
-
         # ServiceProxy登録
         self.client = rospy.ServiceProxy("/empty_space_estimation/service", EmptySpaceService)
-        self.client_nanosam = rospy.ServiceProxy("/object_detection/service", ObjectDetectionService)
+        self.client_nanosam = rospy.ServiceProxy("/object_detection_nanosam/service", ObjectDetectionService)
         rospy.loginfo("Empty Space Estimation Client initialized.")
+
+        self.empty_space_estimation_client = actionlib.SimpleActionClient('/empty_space_estimation/action', EmptySpaceEstimationAction)
+        rospy.loginfo("Action Server 待ち合わせ中…")
+        self.empty_space_estimation_client.wait_for_server()
+        rospy.loginfo("Action Server connected.")
 
     def callback(self, msg):
         self.image_msg = msg  # ← ここで画像を保存
@@ -83,47 +91,80 @@ class SpaceEstimationClient:
 
         return input_path
     
+    def get_result(self):
+        rospy.loginfo("ESE-client: Waiting for empty space estimation result...")
+        self.empty_space_estimation_client.wait_for_result()
+        result = self.empty_space_estimation_client.get_result()
+        rospy.loginfo("ESE-client: Get empty space estimation result")
+        self.loginfo(result)
+        return result.results
 
-    def run(self):
+    def run(self, input_image_path=None, bbox=None, sync=False):
         try:
             # nanosamを呼び出す
             package = roslib.packages.get_pkg_dir("empty_space_estimation")
             ymal_path = os.path.join(package, "io", "nanosam.yaml")
             point = rospy.wait_for_message("/hma_pcl_reconst/depth_registered/points", PointCloud2, timeout=10)
-            request_nanosam = ObjectDetectionServiceRequest(use_latest_image=True, specific_id=ymal_path, max_distance=1.0)
-            response_nanosam = self.client_nanosam(request_nanosam)
-            input_image_path = self.save_image(response_nanosam.detections.rgb)
+            if input_image_path is None or bbox is None:  # input_image_pathが指定されていない場合
+                request_nanosam = ObjectDetectionServiceRequest(use_latest_image=True, specific_id=ymal_path, max_distance=1.0)
+                response_nanosam = self.client_nanosam(request_nanosam)
+                bbox = response_nanosam.detections.bbox
+                input_image_path = self.save_image(response_nanosam.detections.rgb)
+            else: # input_image_pathが指定されている場合
+                pass
             image_path = seg_node.main_segmentation(input_image_path)
             use_image = self.bridge.cv2_to_imgmsg(cv2.imread(image_path), encoding="bgr8")
 
             
-            detection_image = self.mark_image(use_image, response_nanosam.detections.bbox)
-            
-            
+            detection_image = self.mark_image(use_image, bbox)  # bboxを使用して画像にマークを付ける            
 
             # 空き領域推定サービス呼び出し
-            request = EmptySpaceServiceRequest()
-            # #  画像を保存
-            # package_path = roslib.packages.get_pkg_dir("empty_space_estimation")
-            # file_path = os.path.join(package_path, "input", "tmp_input_image.jpg")
-            # self.save_image(self.image_msg, file_path)
-            target_obj = rospy.get_param("/target_object", "コップ")
-            add_prompt = rospy.get_param("/add_prompt", "")
-            rospy.loginfo(f"Target object for space estimation: {target_obj}")
-            request.question = f"追加情報として，{add_prompt}．棚の画像を解析して、{target_obj}置くのに適した場所を提案してください。"
-            request.image = self.bridge.cv2_to_imgmsg(detection_image, encoding="bgr8")
-            request.point = point  # PointCloud2メッセージをセット
-            response = self.client(request)
+            if sync:
+                request = EmptySpaceServiceRequest()
+                # #  画像を保存
+                # package_path = roslib.packages.get_pkg_dir("empty_space_estimation")
+                # file_path = os.path.join(package_path, "input", "tmp_input_image.jpg")
+                # self.save_image(self.image_msg, file_path)
+                target_obj = rospy.get_param("/target_object", "コップ")
+                add_prompt = rospy.get_param("/add_prompt", "")
+                rospy.loginfo(f"Target object for space estimation: {target_obj}")
+                request.question = f"追加情報として，{add_prompt}．棚の画像を解析して、{target_obj}置くのに適した場所を提案してください。"
+                request.image = self.bridge.cv2_to_imgmsg(detection_image, encoding="bgr8")
+                request.point = point  # PointCloud2メッセージをセット
+                response = self.client(request)
+                self.loginfo("空き領域推定結果:")
+                self.loginfo(response.results)
+                return response.results
 
-            rospy.loginfo("空き領域推定結果:")
-            rospy.loginfo(response.results)
-            return response.results
+            else:
+                goal = EmptySpaceEstimationGoal()
+                # #  画像を保存
+                # package_path = roslib.packages.get_pkg_dir("empty_space_estimation")
+                # file_path = os.path.join(package_path, "input", "tmp_input_image.jpg")
+                # self.save_image(self.image_msg, file_path)
+                target_obj = rospy.get_param("/target_object", "コップ")
+                add_prompt = rospy.get_param("/add_prompt", "")
+                self.loginfo(f"Target object for space estimation: {target_obj}")
+                goal.question = f"追加情報として，{add_prompt}．棚の画像を解析して、{target_obj}置くのに適した場所を提案してください。"
+                goal.image = self.bridge.cv2_to_imgmsg(detection_image, encoding="bgr8")
+                goal.point = point  # PointCloud2メッセージをセット
+                self.loginfo("Sending goal to empty space estimation action server...")
+                self.empty_space_estimation_client.send_goal(goal)
+                self.empty_space_estimation_client.wait_for_result()
+                result = self.empty_space_estimation_client.get_result()
+                print(result)
+                self.loginfo("Sended goal to empty space estimation action server...")
 
         except rospy.ServiceException as e:
             rospy.logerr("サービス呼び出しに失敗しました: %s", str(e))
 
 
 if __name__ == "__main__":
+    rospy.init_node("empty_space_client")
     cls = SpaceEstimationClient()
     rospy.loginfo("Starting empty space estimation client...")
-    cls.run()
+    # image_path = "/home/hma/ros_ws/src/7_tasks/hma_hsr_sg_pkg/io/images/20250709_1502/place_0.png"
+    # cls.run(input_image_path=image_path)  # Noneを渡すことで最新の画像を使用
+    cls.run(sync=False)
+
+    cls.get_result()

@@ -15,12 +15,14 @@ import yaml
 import dataclasses
 import roslib
 import requests
+import actionlib
 import subprocess
 
 from tamlib.utils import Logger
 import rospy
-from empty_space_estimation.msg import EmptySpace 
+from empty_space_estimation.msg import EmptySpace, EmptySpaceEstimationAction, EmptySpaceEstimationFeedback, EmptySpaceEstimationResult
 from empty_space_estimation.srv import EmptySpaceService, EmptySpaceServiceResponse, EmptySpaceServiceRequest
+
 
 from sensor_msgs.msg import Image as ROSImage, PointCloud2
 from sensor_msgs import point_cloud2 as pc2
@@ -38,6 +40,8 @@ class Seg2PlaceChatBotGemini:
         rospy.loginfo("Empty Spaca Estimation Server ready...")
         self.bridge = CvBridge()
         self.srv_estimation = rospy.Service("/empty_space_estimation/service", EmptySpaceService, self.run)
+        self.action_estimation_server = actionlib.SimpleActionServer("/empty_space_estimation/action", EmptySpaceEstimationAction, execute_cb=self.run_action)
+        self.action_estimation_server.start()
         self.pub_image = rospy.Publisher("/empty_space_estimation/result_image", ROSImage, queue_size=1)
         rospy.loginfo("Empty space estimation service is ready!")
         self.vizualization = rospy.get_param("~visualize", False)
@@ -260,7 +264,6 @@ class Seg2PlaceChatBotGemini:
         z_filled = cv2.inpaint(z_map, nan_mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
         return z_filled
 
-    
     def run(self, req):
         if not hasattr(self, '_z_filled'):
             self._z_filled = self.build_filled_depth_map(req.point)
@@ -350,7 +353,92 @@ class Seg2PlaceChatBotGemini:
             self.marker_pub.publish(marker)
                 
         return response
+
+
+    def run_action(self, goal):
+        if not hasattr(self, '_z_filled'):
+            self._z_filled = self.build_filled_depth_map(goal.point)
+
+        self.cvbridge = CvBridge()
+        image = goal.image
         
+        # image_path = .main_segmentation(input_image_path)
+
+        select_number = None
+        package_path = roslib.packages.get_pkg_dir("empty_space_estimation")
+
+        # パッケージパスの後ろに続けるパス
+        file_path = os.path.join(package_path, "io", "config.yaml")
+        with open(file_path, 'r') as file:
+            config = yaml.safe_load(file)
+        add_number_path = config["PATH"]["IMG_ADD_NUMBERS"]
+
+        image = self.cvbridge.imgmsg_to_cv2(image, desired_encoding='bgr8')
+        image = self.add_numbers_to_image(image, add_number_path)
+
+        # Flaskサーバーのエンドポイント
+        if rospy.get_param("hsr_type", "exeception") != "exeception":
+            url = "http://192.168.0.10:5001/empty_space_estimation"
+        else:
+            url = "http://localhost:5001/empty_space_estimation"
+        print(f"Using URL: {url}")
+
+        files = [self.prepare_file_entry("image", image)]
+        # 質問の用意\
+        data = {"question": str(goal.question)}
+
+        rospy.loginfo("Sending request to the server...")
+        select_number = requests.post(url, files=files, data=data)
+        rospy.loginfo(f"Response from server: {select_number.text}")
+                # パッケージパスの後ろに続けるパス
+        file_path = os.path.join(package_path, "io", "config.yaml")
+        with open(file_path, 'r') as file:
+            config = yaml.safe_load(file)
+        add_marker_path = config["PATH"]["IMG_ADD_NUMBERS"]
+        x, y = self.add_number_to_image_next(select_number.text, add_marker_path)
+        
+        result = EmptySpaceEstimationResult()
+        result.results.frame_id = str(goal.point.header.frame_id)
+        rospy.loginfo(f"Frame ID: {result.results.frame_id}")
+      
+        point = self.get_3d_point_from_pixel_correct_nan(goal.point, x, y)
+        x, y, z = point
+        result.results.x = x
+        result.results.y = y
+
+        if self.vizualization:
+            marker = Marker()
+            marker.header.frame_id = str(goal.point.header.frame_id)  # ここはあなたの点群のフレームに合わせてください
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = str(goal.point.header.frame_id)
+            marker.id = 0
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+
+            marker.pose.position.x = x
+            marker.pose.position.y = y
+            marker.pose.position.z = z
+
+            marker.pose.orientation.x = 0
+            marker.pose.orientation.y = 0
+            marker.pose.orientation.z = 0
+            marker.pose.orientation.w = 1
+
+            marker.scale.x = 0.05
+            marker.scale.y = 0.05
+            marker.scale.z = 0.05
+
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+
+            marker.lifetime = rospy.Duration()
+
+            self.marker_pub.publish(marker)
+                
+        self.action_estimation_server.set_succeeded(result)
+        # return result
 
 
 if __name__ == "__main__":
