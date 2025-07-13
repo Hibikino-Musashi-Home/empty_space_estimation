@@ -1,7 +1,14 @@
 object:
   - object
+catlery:
+  - cutlery
+  - plate
+  - bowl
   - cup
-  - peach
+fruit:
   - fruit
-  - spam
+food:
+  - food
   - canned
+toy:
+  - toy

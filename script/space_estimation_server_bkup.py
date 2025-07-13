@@ -15,7 +15,7 @@ import datetime
 import glob
 import yaml
 import dataclasses
-import seg_node
+import empty_space_estimation.seg_node as seg_node
 import roslib
 import requests
 

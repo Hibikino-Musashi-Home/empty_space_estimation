@@ -13,7 +13,7 @@ import datetime
 import glob
 import yaml
 import dataclasses
-import seg_node
+import empty_space_estimation.seg_node as seg_node
 import roslib
 import requests
 import subprocess
@@ -264,7 +264,7 @@ class Seg2PlaceChatBotGemini:
     
     def run(self, req):
         if not hasattr(self, '_z_filled'):
-            self._z_filled = self.build_filled_depth_map(req.point)
+            self.filled_z = self.build_filled_depth_map(req.point)
 
         self.cvbridge = CvBridge()
         image = req.image
